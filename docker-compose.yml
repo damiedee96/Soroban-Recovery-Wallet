@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  # ─── Soroban Local Testnet ────────────────────────────────────
+  soroban-node:
+    image: stellar/quickstart:soroban-dev
+    container_name: soroban-node
+    ports:
+      - "8000:8000"   # Horizon API
+      - "11625:11625" # Stellar Core peer port
+      - "11626:11626" # Stellar Core HTTP port
+    environment:
+      - NETWORK=local
+      - ENABLE_SOROBAN_RPC=true
+    volumes:
+      - soroban-data:/opt/stellar
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - wallet-net
+
+  # ─── Backend API ──────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recovery-wallet-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - SOROBAN_RPC_URL=http://soroban-node:8000/soroban/rpc
+      - HORIZON_URL=http://soroban-node:8000
+      - STELLAR_NETWORK=local
+      - JWT_SECRET=${JWT_SECRET}
+      - RECOVERY_WALLET_CONTRACT_ID=${RECOVERY_WALLET_CONTRACT_ID}
+      - GUARDIAN_REGISTRY_CONTRACT_ID=${GUARDIAN_REGISTRY_CONTRACT_ID}
+      - MULTISIG_CONTRACT_ID=${MULTISIG_CONTRACT_ID}
+      - ADMIN_SECRET_KEY=${ADMIN_SECRET_KEY}
+    volumes:
+      - ./backend/src:/app/src
+    depends_on:
+      soroban-node:
+        condition: service_healthy
+    networks:
+      - wallet-net
+    restart: unless-stopped
+
+  # ─── Frontend ─────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: recovery-wallet-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4000
+      - NEXT_PUBLIC_SOROBAN_RPC_URL=http://localhost:8000/soroban/rpc
+      - NEXT_PUBLIC_HORIZON_URL=http://localhost:8000
+      - NEXT_PUBLIC_STELLAR_NETWORK=TESTNET
+      - NEXT_PUBLIC_RECOVERY_WALLET_CONTRACT_ID=${RECOVERY_WALLET_CONTRACT_ID}
+      - NEXT_PUBLIC_GUARDIAN_REGISTRY_CONTRACT_ID=${GUARDIAN_REGISTRY_CONTRACT_ID}
+      - NEXT_PUBLIC_MULTISIG_CONTRACT_ID=${MULTISIG_CONTRACT_ID}
+    volumes:
+      - ./frontend/src:/app/src
+    depends_on:
+      - backend
+    networks:
+      - wallet-net
+    restart: unless-stopped
+
+volumes:
+  soroban-data:
+
+networks:
+  wallet-net:
+    driver: bridge

@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --stellar-50: 240 249 255;
+    --stellar-100: 224 242 254;
+    --stellar-400: 56 189 248;
+    --stellar-500: 14 165 233;
+    --stellar-600: 2 132 199;
+    --stellar-700: 3 105 161;
+    --stellar-900: 12 74 110;
+  }
+
+  * {
+    @apply border-slate-700;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+}
+
+@layer utilities {
+  .bg-stellar-gradient {
+    background: radial-gradient(
+        ellipse at top left,
+        rgba(2, 132, 199, 0.15) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse at bottom right,
+        rgba(14, 165, 233, 0.08) 0%,
+        transparent 50%
+      ),
+      #020617;
+  }
+
+  .text-stellar-400 {
+    color: rgb(56 189 248);
+  }
+
+  .bg-stellar-600 {
+    background-color: rgb(2 132 199);
+  }
+
+  .hover\:bg-stellar-700:hover {
+    background-color: rgb(3 105 161);
+  }
+
+  .ring-stellar-500 {
+    --tw-ring-color: rgb(14 165 233);
+  }
+
+  .border-stellar-600 {
+    border-color: rgb(2 132 199);
+  }
+
+  .bg-stellar-900\/50 {
+    background-color: rgb(12 74 110 / 0.5);
+  }
+
+  .bg-stellar-600\/20 {
+    background-color: rgb(2 132 199 / 0.2);
+  }
+
+  .border-stellar-500\/30 {
+    border-color: rgb(14 165 233 / 0.3);
+  }
+
+  .shadow-stellar-500\/10 {
+    --tw-shadow-color: rgb(14 165 233 / 0.1);
+  }
+
+  .ring-stellar-500\/40 {
+    --tw-ring-color: rgb(14 165 233 / 0.4);
+  }
+
+  .hover\:bg-stellar-900\/30:hover {
+    background-color: rgb(12 74 110 / 0.3);
+  }
+
+  .focus\:ring-stellar-500:focus {
+    --tw-ring-color: rgb(14 165 233);
+  }
+
+  .animate-in {
+    animation-duration: 200ms;
+    animation-fill-mode: both;
+  }
+
+  .fade-in {
+    animation-name: fadeIn;
+  }
+
+  .zoom-in-95 {
+    animation-name: zoomIn95;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes zoomIn95 {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+}
