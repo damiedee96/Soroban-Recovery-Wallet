@@ -10,6 +10,29 @@ use soroban_sdk::{
     Address, Env, Vec,
 };
 
+// ─── Events ───────────────────────────────────────────────────
+
+fn emit_guardian_added(env: &Env, wallet: &Address, guardian: &Address) {
+    env.events().publish(
+        (symbol_short!("g_added"), wallet.clone()),
+        guardian.clone(),
+    );
+}
+
+fn emit_guardian_removed(env: &Env, wallet: &Address, guardian: &Address) {
+    env.events().publish(
+        (symbol_short!("g_removed"), wallet.clone()),
+        guardian.clone(),
+    );
+}
+
+fn emit_threshold_updated(env: &Env, wallet: &Address, threshold: u32) {
+    env.events().publish(
+        (symbol_short!("g_thresh"), wallet.clone()),
+        threshold,
+    );
+}
+
 // ─── Storage keys ─────────────────────────────────────────────
 
 const GUARDIANS: &str = "GUARDIANS";
@@ -60,14 +83,16 @@ impl GuardianRegistry {
         }
 
         guardians.push_back(GuardianEntry {
-            address: guardian,
+            address: guardian.clone(),
             added_at: env.ledger().timestamp(),
             is_active: true,
         });
 
         env.storage()
             .persistent()
-            .set(&(GUARDIANS, wallet), &guardians);
+            .set(&(GUARDIANS, wallet.clone()), &guardians);
+
+        emit_guardian_added(&env, &wallet, &guardian);
     }
 
     // ── Remove a guardian ─────────────────────────────────────
@@ -96,7 +121,9 @@ impl GuardianRegistry {
 
         env.storage()
             .persistent()
-            .set(&(GUARDIANS, wallet), &updated);
+            .set(&(GUARDIANS, wallet.clone()), &updated);
+
+        emit_guardian_removed(&env, &wallet, &guardian);
     }
 
     // ── Set approval threshold ────────────────────────────────
@@ -111,7 +138,9 @@ impl GuardianRegistry {
 
         env.storage()
             .persistent()
-            .set(&(THRESHOLD, wallet), &threshold);
+            .set(&(THRESHOLD, wallet.clone()), &threshold);
+
+        emit_threshold_updated(&env, &wallet, threshold);
     }
 
     // ── List guardians ────────────────────────────────────────

@@ -1,17 +1,70 @@
 //! Recovery Wallet Contract
 //!
 //! Core wallet contract with:
-//!   - Social recovery (guardian-based)
+//!   - Social recovery (guardian-based, cross-contract guardian verification)
 //!   - Time-delayed recovery execution
 //!   - Emergency freeze / unfreeze
 //!   - Owner transfer on successful recovery
+//!   - On-chain event emission for all state changes
 
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype,
+    contract, contractimpl, contracttype, symbol_short,
     Address, Bytes, Env, Vec,
 };
+
+// ─── Guardian Registry client (cross-contract) ────────────────
+
+mod guardian_registry {
+    soroban_sdk::contractimport!(
+        file = "../target/wasm32-unknown-unknown/release/guardian_registry.wasm"
+    );
+}
+
+// ─── Events ───────────────────────────────────────────────────
+
+fn emit_recovery_initiated(env: &Env, wallet: &Address, new_owner: &Address) {
+    env.events().publish(
+        (symbol_short!("rec_init"), wallet.clone()),
+        new_owner.clone(),
+    );
+}
+
+fn emit_recovery_approved(env: &Env, wallet: &Address, guardian: &Address, approvals: u32) {
+    env.events().publish(
+        (symbol_short!("rec_appr"), wallet.clone()),
+        (guardian.clone(), approvals),
+    );
+}
+
+fn emit_recovery_executed(env: &Env, wallet: &Address, new_owner: &Address) {
+    env.events().publish(
+        (symbol_short!("rec_exec"), wallet.clone()),
+        new_owner.clone(),
+    );
+}
+
+fn emit_recovery_cancelled(env: &Env, wallet: &Address) {
+    env.events().publish(
+        (symbol_short!("rec_cncl"), wallet.clone()),
+        (),
+    );
+}
+
+fn emit_wallet_frozen(env: &Env, wallet: &Address) {
+    env.events().publish(
+        (symbol_short!("frozen"), wallet.clone()),
+        env.ledger().timestamp(),
+    );
+}
+
+fn emit_wallet_unfrozen(env: &Env, wallet: &Address) {
+    env.events().publish(
+        (symbol_short!("unfrozen"), wallet.clone()),
+        env.ledger().timestamp(),
+    );
+}
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -118,10 +171,14 @@ impl RecoveryWallet {
         wallet: Address,
         new_owner: Address,
         required_approvals: u32,
+        guardian_registry_id: Address,
     ) {
-        // Any guardian (or the initiator) can call this; auth is on the caller
+        // Verify the caller is a registered guardian via cross-contract call
+        let registry = guardian_registry::Client::new(&env, &guardian_registry_id);
         let caller = env.current_contract_address();
-        // In production, verify caller is a registered guardian via cross-contract call
+        if !registry.is_guardian(&wallet, &caller) {
+            panic!("Caller is not a registered guardian");
+        }
 
         let wallet_info = Self::load_wallet(&env, &wallet);
         if wallet_info.is_frozen {
@@ -146,11 +203,11 @@ impl RecoveryWallet {
         let request = RecoveryRequest {
             id: id.into(),
             wallet: wallet.clone(),
-            new_owner,
+            new_owner: new_owner.clone(),
             initiated_by: caller,
             initiated_at: now,
             execute_after: now + wallet_info.recovery_delay_secs,
-            expires_at: now + wallet_info.recovery_delay_secs + (7 * 24 * 60 * 60), // +7 days
+            expires_at: now + wallet_info.recovery_delay_secs + (7 * 24 * 60 * 60),
             status: RecoveryStatus::Pending,
             approvals: Vec::new(&env),
             required_approvals,
@@ -158,7 +215,9 @@ impl RecoveryWallet {
 
         env.storage()
             .persistent()
-            .set(&(ACTIVE_RECOVERY, wallet), &request);
+            .set(&(ACTIVE_RECOVERY, wallet.clone()), &request);
+
+        emit_recovery_initiated(&env, &wallet, &new_owner);
     }
 
     // ── Approve recovery (guardian action) ────────────────────
@@ -188,15 +247,18 @@ impl RecoveryWallet {
             }
         }
 
-        request.approvals.push_back(guardian);
+        request.approvals.push_back(guardian.clone());
 
         if request.approvals.len() as u32 >= request.required_approvals {
             request.status = RecoveryStatus::Approved;
         }
 
+        let approvals_count = request.approvals.len() as u32;
         env.storage()
             .persistent()
             .set(&(ACTIVE_RECOVERY, wallet.clone()), &request);
+
+        emit_recovery_approved(&env, &wallet, &guardian, approvals_count);
     }
 
     // ── Cancel recovery (owner action) ────────────────────────
@@ -214,6 +276,7 @@ impl RecoveryWallet {
 
         request.status = RecoveryStatus::Cancelled;
         Self::archive_recovery(&env, &wallet, request);
+        emit_recovery_cancelled(&env, &wallet);
     }
 
     // ── Execute recovery (after delay + threshold met) ────────
@@ -238,13 +301,15 @@ impl RecoveryWallet {
 
         // Transfer ownership
         let mut wallet_info = Self::load_wallet(&env, &wallet);
-        wallet_info.owner = request.new_owner.clone();
+        let new_owner = request.new_owner.clone();
+        wallet_info.owner = new_owner.clone();
         env.storage()
             .persistent()
             .set(&(WALLET_INFO, wallet.clone()), &wallet_info);
 
         request.status = RecoveryStatus::Executed;
         Self::archive_recovery(&env, &wallet, request);
+        emit_recovery_executed(&env, &wallet, &new_owner);
     }
 
     // ── Get active recovery ───────────────────────────────────
@@ -280,7 +345,9 @@ impl RecoveryWallet {
         };
         env.storage()
             .persistent()
-            .set(&(FREEZE_STATUS, wallet), &status);
+            .set(&(FREEZE_STATUS, wallet.clone()), &status);
+
+        emit_wallet_frozen(&env, &wallet);
     }
 
     // ── Unfreeze wallet ───────────────────────────────────────
@@ -301,7 +368,9 @@ impl RecoveryWallet {
         };
         env.storage()
             .persistent()
-            .set(&(FREEZE_STATUS, wallet), &status);
+            .set(&(FREEZE_STATUS, wallet.clone()), &status);
+
+        emit_wallet_unfrozen(&env, &wallet);
     }
 
     // ── Get freeze status ─────────────────────────────────────

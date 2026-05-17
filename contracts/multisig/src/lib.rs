@@ -6,9 +6,39 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype,
+    contract, contractimpl, contracttype, symbol_short,
     Address, Bytes, BytesN, Env, String, Vec,
 };
+
+// ─── Events ───────────────────────────────────────────────────
+
+fn emit_proposal_created(env: &Env, wallet: &Address, proposal_id: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("p_create"), wallet.clone()),
+        proposal_id.clone(),
+    );
+}
+
+fn emit_proposal_approved(env: &Env, wallet: &Address, proposal_id: &BytesN<32>, signer: &Address) {
+    env.events().publish(
+        (symbol_short!("p_appr"), wallet.clone()),
+        (proposal_id.clone(), signer.clone()),
+    );
+}
+
+fn emit_proposal_rejected(env: &Env, wallet: &Address, proposal_id: &BytesN<32>, signer: &Address) {
+    env.events().publish(
+        (symbol_short!("p_rej"), wallet.clone()),
+        (proposal_id.clone(), signer.clone()),
+    );
+}
+
+fn emit_proposal_executed(env: &Env, wallet: &Address, proposal_id: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("p_exec"), wallet.clone()),
+        proposal_id.clone(),
+    );
+}
 
 // ─── Storage keys ─────────────────────────────────────────────
 
@@ -122,8 +152,9 @@ impl MultiSig {
         proposals.push_back(proposal);
         env.storage()
             .persistent()
-            .set(&(PROPOSALS, wallet), &proposals);
+            .set(&(PROPOSALS, wallet.clone()), &proposals);
 
+        emit_proposal_created(&env, &wallet, &id);
         id
     }
 
@@ -161,10 +192,10 @@ impl MultiSig {
 
         env.storage()
             .persistent()
-            .set(&(PROPOSALS, wallet), &updated);
-    }
+            .set(&(PROPOSALS, wallet.clone()), &updated);
 
-    // ── Reject proposal ───────────────────────────────────────
+        emit_proposal_approved(&env, &wallet, &proposal_id, &signer);
+    }
 
     pub fn reject_proposal(env: Env, wallet: Address, proposal_id: BytesN<32>, signer: Address) {
         signer.require_auth();
@@ -192,7 +223,9 @@ impl MultiSig {
 
         env.storage()
             .persistent()
-            .set(&(PROPOSALS, wallet), &updated);
+            .set(&(PROPOSALS, wallet.clone()), &updated);
+
+        emit_proposal_rejected(&env, &wallet, &proposal_id, &signer);
     }
 
     // ── Execute proposal ──────────────────────────────────────
@@ -220,7 +253,9 @@ impl MultiSig {
 
         env.storage()
             .persistent()
-            .set(&(PROPOSALS, wallet), &updated);
+            .set(&(PROPOSALS, wallet.clone()), &updated);
+
+        emit_proposal_executed(&env, &wallet, &proposal_id);
     }
 
     // ── List proposals ────────────────────────────────────────

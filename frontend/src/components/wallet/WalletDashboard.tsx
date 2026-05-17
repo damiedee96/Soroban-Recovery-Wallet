@@ -9,10 +9,12 @@ import {
   Copy,
   ExternalLink,
   AlertOctagon,
+  Send,
 } from "lucide-react";
 import { Card, CardHeader, StatCard } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useWallet } from "@/hooks/useWallet";
+import { SendPayment } from "@/components/wallet/SendPayment";
 import { shortenAddress } from "@/lib/stellar";
 import { formatDistanceToNow } from "date-fns";
 import toast from "react-hot-toast";
@@ -28,6 +30,7 @@ export function WalletDashboard() {
     refetchBalance,
     disconnect,
   } = useWallet();
+  const [showSend, setShowSend] = React.useState(false);
 
   if (!wallet) return null;
 
@@ -89,6 +92,14 @@ export function WalletDashboard() {
                 Explorer
               </Button>
             </a>
+            <Button
+              size="sm"
+              onClick={() => setShowSend(true)}
+              disabled={freezeStatus.isFrozen}
+              leftIcon={<Send className="w-3.5 h-3.5" />}
+            >
+              Send
+            </Button>
             <Button variant="ghost" size="sm" onClick={disconnect}>
               Disconnect
             </Button>
@@ -149,6 +160,9 @@ export function WalletDashboard() {
           </div>
         )}
       </Card>
+
+      {/* Send Payment Modal */}
+      <SendPayment isOpen={showSend} onClose={() => setShowSend(false)} />
     </div>
   );
 }
